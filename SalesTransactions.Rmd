@@ -1,0 +1,268 @@
+---
+title: "Sales Transactions Analysis"
+output: 
+  html_document: default
+---
+
+- Dataset: `CS.xlsx`
+
+The dataset contains historical records of coffee shop sales transactions. Each row represents a transaction performed and the variables are as follows: 
+
+- `transaction_id`: Unique identifier for each transaction
+- `transaction_date`: Date of the transaction
+- `transaction_time`: Time of the transaction
+- `transaction_qty`: Quantity of product sold in the transaction
+- `store_id`: Identifier for the store location
+- `store_location`: Location of the store
+- `product_id`: Unique identifier for product 
+- `unit_price`: Unit price of the product
+- `product_category`: Category of the product
+- `product_type`: Type of product within the category
+- `product_detail`: Name of the product
+- `revenue`: Revenue from the transaction
+- `Month`: Month (Numerical) of the transaction
+- `Month.t`: Month of the transaction
+- `Weekday`: Day (Numerical) of week of the transaction
+- `Weekday.t`: Day of week of the transaction
+- `Hour`: Hour of the day of the transaction
+
+### Preparation
+
+```{css, echo=FALSE}
+
+.rpivotTable{ overflow-x: scroll; }
+.rpivotTable{ overflow: auto; }
+
+```
+
+```{r load-libraries, echo=TRUE, message=FALSE, warning=FALSE}
+#install.packages - only need to run this code once to install the package
+# load required packages
+# library("xxxx")
+library("dplyr")
+library("tidyverse") #need to call the library before you use the package
+library("rpivotTable")
+library("knitr")
+library("psych")
+library("RColorBrewer") 
+library("readxl")
+```
+
+```{r read-dataset, echo=TRUE}
+# import dataset into RStudio
+vCS <- read_excel("CS.xlsx", 
+                 col_types = c("numeric", "date", "date", 
+                               "numeric", "numeric", "text", "numeric", 
+                               "numeric", "text", "text", "text", 
+                               "numeric", "numeric", "text", "numeric", "text", "numeric"))
+```
+
+
+### Data Inspection
+Checking for missing values in the data. 
+
+```{r DI, echo=FALSE}
+
+# Type your codes
+colSums(is.na(vCS))
+which(is.na(vCS$transaction_qty))
+vCS$transaction_id[149110]
+which(is.na(vCS$revenue))
+vCS %>% filter(is.na(revenue)) %>% select(transaction_id)
+```
+
+<p style="color:blue">
+Transaction_qty has 1 missing value, and the corresponding transaction id is 149450. Revenue has 7 missing values, and the corresponding transaction ids are 149450, 149451, 149452, 149453, 149454, 149455, 149456.
+</p>
+
+
+### Transactions Dashboard
+Store managers would like to know when, where and for what products transactions take place. 
+
+```{r TD, echo=FALSE}
+
+#Table displaying number of transactions for store location
+LocationFreq <- vCS %>% count(store_location)
+kable(LocationFreq, caption = "Number of Transactions for Each Store Location")
+
+#Pie chart displaying number of transactions for store location
+slice.location <- LocationFreq$n
+location.pipercent <- 100*round(LocationFreq$n/sum(LocationFreq$n),2) 
+label <- LocationFreq$store_location
+label <- paste(label, ",", sep="")
+label <- paste(label, location.pipercent)
+label <- paste(label, "%",sep="")
+pie(slice.location, 
+    labels = label, 
+    col=c("blue","green","purple"), 
+    radius = 1, 
+    main = "Transactions by Store Location")
+
+#Table displaying number of transactions by product type
+ProductFreq <- vCS %>% count(product_type)
+kable(ProductFreq, caption = "Number of Transactions by Product Type")
+
+#Bar plot displaying number of transactions by product type
+barplot(ProductFreq$n, 
+        names.arg = ProductFreq$product_type, 
+        col="blue", 
+        ylim=c(0, 20000), 
+        xlab = "Product",
+        ylab ="No. of Transactions",
+        main = "No. of Transactions by Product Type",
+        cex.names = 0.5, 
+        las = 2)
+
+is.ordered(vCS$`Month-t`)
+is.factor(vCS$`Month-t`)
+# Month-t is not an ordered factor.
+is.ordered(vCS$`Weekday-t`)
+is.factor(vCS$`Weekday-t`)
+# Weekday-t is not an ordered factor.
+vCS$`Month-t` <- factor(vCS$`Month-t`, levels=c("Jan", "Feb", "Mar", "Apr", "May", "Jun"), ordered = TRUE)
+vCS$`Weekday-t` <- factor(vCS$`Weekday-t`, levels=c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"), ordered=TRUE)
+
+#Table displaying number of transactions by the month
+MonthFreq <- vCS %>% count(`Month-t`)
+kable(MonthFreq, caption="Frequency of Transactions by Month")
+
+#Table displaying number of transactions by the weekday
+WeekdayFreq <- vCS %>% count(`Weekday-t`)
+kable(WeekdayFreq, caption="Frequency of Transactions by Weekdays")
+
+#Table displaying number of transactions by the hour
+HourFreq <- vCS %>% count(Hour)
+kable(HourFreq, caption="Frequency of Transactions by Hour")
+
+#Line chart displaying number of transactions by the hour
+plot(HourFreq$Hour, 
+     HourFreq$n, 
+     type="o", 
+     pch=16, 
+     ylim=c(500, 20000), 
+     col="red", 
+     xlab="Hour", 
+     ylab="No. of Transactions", 
+     main="No. of Transactions by Hour")
+
+``` 
+
+<p style="color:blue">
+Based on the results, it can be seen that Hell's Kitchen and Astoria carry out roughly the same number of transactions, with Lower Manhattan having the least transactions. Brewed Chai Tea is the most sold product and Green Beans is the least sold product. Most transactions occur in June and the least number of transactions occurred in February. Transactions are roughly the same across the days of the week. Most transactions occur from 7am-11am.
+</p>
+
+
+### Transactions Dashboard II
+Store managers would like to know the frequency of transactions by store locations and month.
+
+```{r TD2, echo=FALSE}
+
+vCS1 <- vCS %>% group_by(store_location, Month) %>% summarise(n=n())
+vCS1.spread <- vCS1 %>% spread(key=Month, value=n)
+kable(vCS1.spread, caption="Contingency Table for Store Location and Month")
+
+barmatrix.vCS1 <- as.matrix(vCS1.spread[,c(2:7)])
+bar_col <- c("blue", "green", "purple")
+barplot(barmatrix.vCS1, 
+        col=bar_col, 
+        beside= TRUE,
+        main= "No. of Transactions by Store Location and Month", 
+        xlab="Month",
+        ylab="No. of Transactions",
+        ylim=c(0, 20000))
+legend("topleft", 
+       cex=0.8, 
+       fill=bar_col, 
+       legend=vCS1.spread$store_location, 
+       title="Store Location")
+
+```
+
+<p style="color:blue">
+Lower Manhattan consistently has the least transactions. Month 2 (Feb) has the least transactions while month 6 (June) has the most transactions.
+</p>
+
+
+### Pareto Analysis Dashboard
+Conduct Pareto Analysis to check if a large proportion of transactions come from a small number of product types.
+
+```{r PA, echo=FALSE}
+
+ProductFreq <- vCS %>% count(product_type)
+
+vCS.product <- ProductFreq %>% 
+  arrange(desc(n))
+vCS.product$Percentage <- vCS.product$n/sum(vCS.product$n)
+vCS.product$Cumulative <- cumsum(vCS.product$Percentage)
+which(vCS.product$Cumulative>0.8)[1]/nrow(vCS.product)
+``` 
+
+<p style="color:blue">
+34.48276% of product types make up at least 80% of transactions
+</p>
+
+### Revenue Analysis Dashboard
+Analysing the revenue data by the store locations
+```{r RA, echo=FALSE}
+CS1 <- vCS %>% na.omit(revenue)
+
+CS1 %>%  summarize(
+  vars = "Revenue",
+  n = n(),
+  mean = mean(revenue),
+  sd = sd(revenue),
+  min = min(revenue),
+  max = max(revenue),
+  skew = psych::skew(revenue),
+  kurtosis = kurtosi(revenue),
+  ) %>% 
+  kable(row.names = FALSE, digits = 2, caption = "Descriptive Statistics for Revenue")
+
+RevSL <- CS1 %>% group_by(store_location)
+table.RevSL <- RevSL %>%  summarize(
+  n = n(),
+  mean = mean(revenue),
+  total = sum(revenue)
+  )
+kable(table.RevSL, row.names = FALSE, digits = 2, caption = "Descriptive Statistics for Revenue by Store Location")
+
+# Average revenue
+barplot(table.RevSL$mean, 
+        names.arg = table.RevSL$store_location, 
+        col="blue", 
+        ylim=c(0, 5), 
+        xlab = "Store Location",
+        ylab ="Mean Revenue",
+        main = "Average Revenue by Store Location"
+        )
+
+#Total Revenue
+barplot(table.RevSL$total, 
+        names.arg = table.RevSL$store_location, 
+        col="blue", 
+        ylim=c(0, 250000), 
+        xlab = "Store Location",
+        ylab ="Total Revenue",
+        main = "Total Revenue by Store Location"
+        )
+```
+
+<p style="color:blue">
+Given that skew = 41.74, there is high-degree of skewness for right-skewed data. Additionally, a kurtosis value of 3359.5 indicates leptokurtic distribution, meaning there are longer tails due to extreme outliers. Thus, data is not normally distributed. 
+The average revenue for Lower Manhattan is the highest, followed by Hell's Kitchen then Astoria. The total revenue for Hell's Kitchen is the most as seen in the bar plot, followed by Astoria then Lower Manhattan.
+</p>
+
+### Correlation Analysis Dashboard
+
+```{r CA, echo=FALSE}
+CS2 <- vCS %>% na.omit(transaction_qty)
+plot(x=CS2$transaction_qty, y=CS2$unit_price, xlab="Transaction Quantity", ylab="Unit Price", main="Scatterplot of Unit Price to Transaction Quantity")
+cor.test(CS2$transaction_qty, CS2$unit_price)
+corr.test(CS2$transaction_qty, CS2$unit_price)
+
+```
+
+<p style="color:blue">
+Since correlation coefficient, which is -0.123582, is less than 0, there is a negative relationship between the two variables. Additionally, a magnitude close to 0 suggests there is weak linear relationship between the two variables, thus the linear relationship between the two variables is not significant. 
+</p>
+
